@@ -3,6 +3,8 @@
   "dependencies": {
     "mongodb": "~1.4.0",
     "request": "~2.44.0",
-    "cheerio": "~0.17.0"
+    "cheerio": "~0.17.0",
+    "node-static": "~0.7.6",
+    "limiter": "~1.0.5"
   }
 }

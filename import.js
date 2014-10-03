@@ -1,7 +1,11 @@
 var MongoClient = require('mongodb').MongoClient;
 var cheerio = require('cheerio');
 var request = require("request");
+var limiter = require("limiter");
 var fs = require('fs');
+var RateLimiter = require('limiter').RateLimiter;
+
+var osmRateLimiter = new RateLimiter(1, 1000);
 
 function parseInfo(text)
 {
@@ -22,8 +26,6 @@ function parseInfo(text)
 
     data['address'] = elements.join(', ');
 
-    console.log(data);
-
     return data;
 }
 
@@ -36,7 +38,19 @@ function treatRequest(error, response, body)
     var elt = $(this);
     var info = parseInfo(elt.find('.bloc_gauche p').text());
     info['name'] = elt.find('.bloc_gauche strong').text();
-    console.log(info);
+
+    osmRateLimiter.removeTokens(1, function(err, remainingRequests) {
+      request({
+        uri: "http://nominatim.openstreetmap.org/search",
+        method: "GET",
+        json: true,
+        qs: {format: "jsonv2", q: info['address'], countrycodes: "fr"}
+      }, function(error, response, body) {
+        console.log(body);
+        console.log('');
+        console.log('');
+      });
+    });
   });
 }
 
