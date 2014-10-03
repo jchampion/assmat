@@ -1,0 +1,8 @@
+{
+  "name": "rhassmat",
+  "dependencies": {
+    "mongodb": "~1.4.0",
+    "request": "~2.44.0",
+    "cheerio": "~0.17.0"
+  }
+}
