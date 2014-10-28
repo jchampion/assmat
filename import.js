@@ -1,11 +1,10 @@
 var MongoClient = require('mongodb').MongoClient;
 var cheerio = require('cheerio');
-var request = require("request");
-var limiter = require("limiter");
 var fs = require('fs');
-var RateLimiter = require('limiter').RateLimiter;
+var util = require('util');
+var locator = require('./services/locator');
+var request = require('./services/request');
 
-var osmRateLimiter = new RateLimiter(1, 1000);
 
 function parseInfo(text)
 {
@@ -29,44 +28,52 @@ function parseInfo(text)
     return data;
 }
 
-function treatRequest(error, response, body)
-{
-  if (error) throw error;
-
-  $ = cheerio.load(body);
-  $('div.coords_am').each(function() {
+function treatCityPage(body) {
+  var $ = cheerio.load(body);
+  $('div.coords_am').each(function () {
     var elt = $(this);
     var info = parseInfo(elt.find('.bloc_gauche p').text());
     info['name'] = elt.find('.bloc_gauche strong').text();
 
-    osmRateLimiter.removeTokens(1, function(err, remainingRequests) {
-      request({
-        uri: "http://nominatim.openstreetmap.org/search",
-        method: "GET",
-        json: true,
-        qs: {format: "jsonv2", q: info['address'], countrycodes: "fr"}
-      }, function(error, response, body) {
-        console.log(body);
-        console.log('');
-        console.log('');
-      });
+    locator.fetchCoordinates(info['address']).then(function(coordinates) {
+      if (coordinates) {
+        info['coordinates'] = coordinates;
+      }
+
+      console.log(info);
     });
   });
 }
 
-/*request({
-  uri: "http://www.rhone.fr/assmat/annuaire",
-  method: "POST",
-  form: {insee: 69121, nbRes: 100, numPage: 1, typeTri: 3}
-}, treatRequest);*/
+function treatIndexPage(body) {
+  var $ = cheerio.load(body);
+  $('select#commune option').each(function () {
+    var elt = $(this), zipCode = elt.attr('value'), city = elt.text();
+    if (!zipCode) return;
+    if (zipCode < 69003) return;// @TEMP prevent ghost cities import
+    console.log(util.format('Starting import for %s (%s)', city, zipCode));
+    request({
+      uri: "http://www.rhone.fr/assmat/annuaire",
+      method: "POST",
+      form: {insee: zipCode, nbRes: 500, numPage: 1, typeTri: 3}
+    }).then(treatCityPage);
 
-fs.readFile('sample.htm', 'utf8', function (err, data) {
+    return false; // @TEMP prevent other cities imports
+  });
+}
+
+request({
+  uri: "http://www.rhone.fr/assmat/annuaire"
+}).then(treatIndexPage);
+
+
+/*fs.readFile('sample.htm', 'utf8', function (err, data) {
   if (err) {
     return console.log(err);
   }
   
   treatRequest(null, null, data);
-});
+});*/
 
 /*MongoClient.connect('mongodb://127.0.0.1:27017/rhassmat', function(err, db) {
     if(err) throw err;
